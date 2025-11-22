@@ -17,6 +17,8 @@ canvas {
   border: 2px solid white;
   border-radius: 8px;
   z-index: 10;
-  transform: scaleX(-1); /* Mirror the video */
-  display: block !important; /* Override JS hiding for now so user sees it works */
+  transform: scaleX(-1);
+  /* Mirror the video */
+  display: block !important;
+  /* Override JS hiding for now so user sees it works */
 }
