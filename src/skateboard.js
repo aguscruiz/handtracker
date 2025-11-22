@@ -1,173 +1,216 @@
-import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
+import * as THREE from 'three'
+import * as CANNON from 'cannon-es'
 
 export class Skateboard {
-    constructor(scene) {
-        this.scene = scene;
-        this.mesh = null;
-        this.body = null;
-        this.createModel();
+    constructor(world) {
+        this.world = world
+        this.createBody()
+        this.createMesh()
     }
 
-    initPhysics(physicsWorld) {
-        // Create physics body
-        const shape = new CANNON.Box(new CANNON.Vec3(0.75, 0.05, 2.0)); // Half extents
+    createBody() {
         this.body = new CANNON.Body({
-            mass: 1, // Dynamic body
-            shape: shape,
-            position: new CANNON.Vec3(0, 2, 0), // Start in air
-            material: physicsWorld.deckMat
-        });
+            mass: 2, // Heavier board
+            position: new CANNON.Vec3(0, 0.5, 0),
+            angularDamping: 0.5,
+            linearDamping: 0.1
+        })
 
-        // Add wheels (simplified as spheres for physics to allow rolling)
-        // Actually, a box is fine for sliding, but for rolling we need wheels.
-        // Let's stick to a box for the deck for now to keep it stable, 
-        // maybe add a material with low friction.
+        // Deck
+        const deckShape = new CANNON.Box(new CANNON.Vec3(0.1, 0.02, 0.3))
+        this.body.addShape(deckShape, new CANNON.Vec3(0, 0.05, 0))
 
-        physicsWorld.addBody(this.body);
+        // Wheels (Spheres for smooth collision)
+        const wheelShape = new CANNON.Sphere(0.03)
+        const wheelY = 0
+        const wheelX = 0.08
+        const wheelZ = 0.18
+
+        this.body.addShape(wheelShape, new CANNON.Vec3(-wheelX, wheelY, -wheelZ))
+        this.body.addShape(wheelShape, new CANNON.Vec3(wheelX, wheelY, -wheelZ))
+        this.body.addShape(wheelShape, new CANNON.Vec3(-wheelX, wheelY, wheelZ))
+        this.body.addShape(wheelShape, new CANNON.Vec3(wheelX, wheelY, wheelZ))
+
+        this.world.physicsWorld.addBody(this.body)
     }
 
-    createModel() {
-        this.mesh = new THREE.Group();
+    createMesh() {
+        this.mesh = new THREE.Group()
 
-        // Curved Deck using ExtrudeGeometry
-        const length = 4.0;
-        const width = 1.5;
-        const thickness = 0.1;
-        const curveHeight = 0.3; // How much nose/tail curve up
-
-        const shape = new THREE.Shape();
-        // Draw side profile of the deck
-        // Start at back tail
-        shape.moveTo(-length / 2, curveHeight);
-        // Curve down to flat part
-        shape.bezierCurveTo(-length / 2 + 0.5, curveHeight, -length / 2 + 0.8, 0, -length / 4, 0);
-        // Flat middle
-        shape.lineTo(length / 4, 0);
-        // Curve up to nose
-        shape.bezierCurveTo(length / 2 - 0.8, 0, length / 2 - 0.5, curveHeight, length / 2, curveHeight);
-        // Close shape (thickness)
-        shape.lineTo(length / 2, curveHeight - thickness);
-        shape.bezierCurveTo(length / 2 - 0.5, curveHeight - thickness, length / 2 - 0.8, -thickness, length / 4, -thickness);
-        shape.lineTo(-length / 4, -thickness);
-        shape.bezierCurveTo(-length / 2 + 0.8, -thickness, -length / 2 + 0.5, curveHeight - thickness, -length / 2, curveHeight - thickness);
-        shape.lineTo(-length / 2, curveHeight);
-
-        const extrudeSettings = {
-            steps: 1,
-            depth: width,
-            bevelEnabled: false
-        };
-
-        const deckGeometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-        // Center the geometry
-        deckGeometry.center();
-        // Rotate to align with Z axis (length)
-        deckGeometry.rotateY(Math.PI / 2);
-
-        const deckMaterial = new THREE.MeshStandardMaterial({
-            color: 0x8B4513, // SaddleBrown
-            roughness: 0.8
-        });
-        const deck = new THREE.Mesh(deckGeometry, deckMaterial);
-        deck.castShadow = true;
-        deck.receiveShadow = true;
-        this.mesh.add(deck);
-
-        // Grip tape (black top) - Simplified as a slightly scaled up plane on top
-        // Or just color the top faces of the geometry?
-        // Let's add a plane that follows the curve? Hard.
-        // Let's just use a dark color for the top of the deck material?
-        // For now, let's make the top face black.
+        // Deck
+        const deckGeo = new THREE.BoxGeometry(0.2, 0.04, 0.6)
+        const deckMat = new THREE.MeshStandardMaterial({ color: 0xcc3333 })
+        const deck = new THREE.Mesh(deckGeo, deckMat)
+        deck.position.y = 0.05
+        deck.castShadow = true
+        this.mesh.add(deck)
 
         // Wheels
-        const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.3, 16);
-        const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const wheelGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.04, 16)
+        const wheelMat = new THREE.MeshStandardMaterial({ color: 0xffffff })
+        wheelGeo.rotateZ(Math.PI / 2)
 
         const positions = [
-            { x: -0.5, y: -0.2, z: 1.2 },
-            { x: 0.5, y: -0.2, z: 1.2 },
-            { x: -0.5, y: -0.2, z: -1.2 },
-            { x: 0.5, y: -0.2, z: -1.2 }
-        ];
+            [-0.08, 0, -0.18],
+            [0.08, 0, -0.18],
+            [-0.08, 0, 0.18],
+            [0.08, 0, 0.18]
+        ]
 
         positions.forEach(pos => {
-            const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
-            wheel.rotation.z = Math.PI / 2;
-            wheel.position.set(pos.x, pos.y, pos.z);
-            wheel.castShadow = true;
-            this.mesh.add(wheel);
-        });
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat)
+            wheel.position.set(...pos)
+            wheel.castShadow = true
+            this.mesh.add(wheel)
+        })
 
-        // Trucks (simplified)
-        const truckGeometry = new THREE.BoxGeometry(1.0, 0.1, 0.2);
-        const truckMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+        this.world.scene.add(this.mesh)
 
-        const truck1 = new THREE.Mesh(truckGeometry, truckMaterial);
-        truck1.position.set(0, -0.1, 1.2);
-        this.mesh.add(truck1);
+        // Debug cursor
+        const cursorGeo = new THREE.RingGeometry(0.2, 0.25, 32)
+        const cursorMat = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.5 })
+        this.cursor = new THREE.Mesh(cursorGeo, cursorMat)
+        this.cursor.rotation.x = -Math.PI / 2
+        this.cursor.position.y = 0.01
+        this.world.scene.add(this.cursor)
+    }
 
-        const truck2 = new THREE.Mesh(truckGeometry, truckMaterial);
-        truck2.position.set(0, -0.1, -1.2);
-        this.mesh.add(truck2);
+    updateInput(handData) {
+        if (!handData || handData.length < 12) {
+            this.cursor.visible = false
+            return
+        }
+        this.cursor.visible = true
 
-        this.scene.add(this.mesh);
-        this.mesh.visible = false; // Hide initially until hands are detected
+        const indexTip = handData[8]
+        const middleTip = handData[12]
+
+        // MediaPipe coords: x (0-1), y (0-1)
+        // We want the center point between fingers
+        const centerX = (indexTip.x + middleTip.x) / 2
+        const centerY = (indexTip.y + middleTip.y) / 2
+
+        // Raycasting logic to find point on ground
+        // 1. Convert to NDC (-1 to +1)
+        // Note: MediaPipe X is mirrored usually, so 1-x might be needed depending on setup.
+        // Assuming standard webcam mirror: 
+        // Screen X: 0 (left) -> 1 (right)
+        // NDC X: -1 (left) -> 1 (right)
+        // But webcam is mirrored, so moving hand RIGHT (screen) is actually moving LEFT in world if we treat screen as window.
+        // Let's stick to: x maps to x, y maps to y for now, but invert X for mirror effect if needed.
+        // Actually, let's just use the standard mapping:
+        // NDC x = (x - 0.5) * 2
+        // NDC y = -(y - 0.5) * 2  (Y is inverted in WebGL)
+
+        const ndcX = (1 - centerX) * 2 - 1 // Invert X for mirror feel
+        const ndcY = -(centerY) * 2 + 1
+
+        const raycaster = new THREE.Raycaster()
+        raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.world.camera)
+
+        // Intersect with board plane (approx y=0.1)
+        // Plane constant is distance from origin along normal. Normal is (0,1,0).
+        // So constant should be -0.1 to be at y=0.1? No, THREE.Plane constant is negative distance from origin if normal points away?
+        // Actually THREE.Plane(normal, constant) -> normal . point + constant = 0
+        // If point is (0, 0.1, 0) and normal is (0, 1, 0): 0.1 + constant = 0 => constant = -0.1
+        const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.1)
+        const targetPoint = new THREE.Vector3()
+        raycaster.ray.intersectPlane(plane, targetPoint)
+
+        if (targetPoint) {
+            // Update cursor
+            this.cursor.position.x = targetPoint.x
+            this.cursor.position.z = targetPoint.z
+
+            const targetX = targetPoint.x
+            const targetZ = targetPoint.z
+
+            // Force-based movement (Spring/PD Controller)
+            // We want it to feel "tight" when close, like you're dragging it.
+            const stiffness = 150 // Much stronger snap
+            const damping = 10    // Reduce oscillation
+
+            const dx = targetX - this.body.position.x
+            const dz = targetZ - this.body.position.z
+
+            // Interaction Radius
+            // If within this radius, we apply force.
+            // Board is ~0.6m long. 1.0m radius is generous but allows catching it.
+            if (Math.abs(dx) < 1.0 && Math.abs(dz) < 1.0) {
+                const fx = (dx * stiffness) - (this.body.velocity.x * damping)
+                const fz = (dz * stiffness) - (this.body.velocity.z * damping)
+
+                this.body.applyForce(new CANNON.Vec3(fx, 0, fz), this.body.position)
+            }
+        }
+
+        // Rotation (Torque-based)
+        const fingerDx = middleTip.x - indexTip.x
+        const fingerDy = middleTip.y - indexTip.y
+        const targetAngle = Math.atan2(fingerDy, fingerDx)
+
+        // Get current rotation
+        const currentRotation = new CANNON.Vec3()
+        this.body.quaternion.toEuler(currentRotation)
+
+        // Calculate angle difference (shortest path)
+        let angleDiff = -targetAngle - currentRotation.y
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2
+        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2
+
+        // Apply torque to rotate towards target
+        // Proportional-Derivative (PD) controller for rotation
+        const kp = 10 // Stiffness
+        const kd = 2  // Damping
+        const torqueY = (angleDiff * kp) - (this.body.angularVelocity.y * kd)
+
+        this.body.torque.y = torqueY
+
+        // Upright stability (keep board from flipping over too easily)
+        // Apply torque to restore X/Z rotation to 0 (flat)
+        const uprightStiffness = 5
+        const uprightDamping = 1
+        this.body.torque.x = (-currentRotation.x * uprightStiffness) - (this.body.angularVelocity.x * uprightDamping)
+        this.body.torque.z = (-currentRotation.z * uprightStiffness) - (this.body.angularVelocity.z * uprightDamping)
+
+        // --- TRICK DETECTION ---
+        if (this.lastCenterY !== undefined) {
+            const velY = this.lastCenterY - centerY
+            const jumpThreshold = 0.03
+            const isGrounded = this.body.position.y < 0.2
+
+            if (velY > jumpThreshold && isGrounded && !this.isJumping) {
+                console.log("OLLIE POP!")
+                this.isJumping = true
+
+                // Pop force
+                this.body.velocity.y = 6
+
+                // Pitch Up
+                const rightDir = new CANNON.Vec3(1, 0, 0)
+                rightDir.applyQuaternion(this.body.quaternion)
+                const popTorque = rightDir.scale(3)
+                this.body.angularVelocity.vadd(popTorque, this.body.angularVelocity)
+
+                // Forward boost
+                const forwardDir = new CANNON.Vec3(0, 0, 1)
+                forwardDir.applyQuaternion(this.body.quaternion)
+                const boost = forwardDir.scale(2)
+                this.body.velocity.vadd(boost, this.body.velocity)
+
+                setTimeout(() => {
+                    const levelTorque = rightDir.scale(-4)
+                    this.body.angularVelocity.vadd(levelTorque, this.body.angularVelocity)
+                    this.isJumping = false
+                }, 200)
+            }
+        }
+        this.lastCenterY = centerY
     }
 
     update() {
-        if (this.mesh && this.body) {
-            this.mesh.visible = true;
-            this.mesh.position.copy(this.body.position);
-            this.mesh.quaternion.copy(this.body.quaternion);
-        }
-    }
-
-    applyAdhesion(targetPos) {
-        if (!this.body) return;
-
-        // Apply force towards target position
-        // F = k * (target - current) - damping * velocity
-        const strength = 150; // Spring stiffness
-        const damping = 10;
-
-        const currentPos = this.body.position;
-        const force = new CANNON.Vec3()
-            .copy(targetPos)
-            .vsub(currentPos)
-            .scale(strength);
-
-        // Subtract damping
-        force.vsub(this.body.velocity.scale(damping), force);
-
-        // Apply to center of mass (or maybe slightly offset to top?)
-        // Applying to center for stability first
-        this.body.applyForce(force, currentPos);
-    }
-
-    checkTricks(handRig) {
-        if (!this.body) return;
-
-        // Ollie Logic
-        // Detect rapid downward movement of Middle Finger (Tail)
-        // Middle Tip is joint 12
-        const middleTipVel = handRig.getVelocity(); // This is palm velocity, need tip velocity?
-        // HandRig doesn't expose tip velocity directly, but we can infer from palm for now or add it.
-        // Let's use palm velocity as a proxy for "hand moving down".
-
-        // Also check if board is on ground (y ~ 0)
-        const isGrounded = this.body.position.y < 0.5;
-
-        if (isGrounded && middleTipVel.y < -5.0) { // Threshold for "Pop"
-            // Apply Pop Force
-            // Upward force + Rotation (lift nose)
-            const popForce = new CANNON.Vec3(0, 15, 0);
-            const popTorque = new CANNON.Vec3(5, 0, 0); // Rotate around X axis (pitch)
-
-            this.body.applyImpulse(popForce, this.body.position);
-            this.body.applyTorque(popTorque);
-
-            console.log("Ollie!");
-        }
+        // Sync mesh with physics body
+        this.mesh.position.copy(this.body.position)
+        this.mesh.quaternion.copy(this.body.quaternion)
     }
 }
