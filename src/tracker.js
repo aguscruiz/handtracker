@@ -10,10 +10,12 @@ export class HandTracker {
   }
 
   async initialize() {
+    console.log("Initializing FilesetResolver...");
     const vision = await FilesetResolver.forVisionTasks(
       "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
     );
-    
+
+    console.log("Creating HandLandmarker...");
     this.handLandmarker = await HandLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
@@ -22,8 +24,10 @@ export class HandTracker {
       runningMode: this.runningMode,
       numHands: 1
     });
-    
+
+    console.log("Starting Webcam...");
     await this.startWebcam();
+    console.log("Webcam started.");
   }
 
   async startWebcam() {
@@ -39,9 +43,10 @@ export class HandTracker {
     });
 
     this.video.srcObject = stream;
-    
+
     return new Promise((resolve) => {
       this.video.addEventListener("loadeddata", () => {
+        console.log("Video data loaded");
         resolve();
       });
     });
@@ -55,7 +60,7 @@ export class HandTracker {
       this.lastVideoTime = this.video.currentTime;
       this.results = this.handLandmarker.detectForVideo(this.video, startTimeMs);
     }
-    
+
     return this.results;
   }
 }
